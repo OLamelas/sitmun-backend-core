@@ -13,6 +13,8 @@ import org.json.JSONObject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.sitmun.infrastructure.persistence.type.codelist.CodeListValidator;
 import org.sitmun.infrastructure.persistence.type.codelist.CodeListValueRepository;
 import org.sitmun.test.BaseTest;
@@ -47,17 +49,18 @@ class SpatialReferenceSystemTest extends BaseTest {
         .getHeader("Location");
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = {"other", "urn:ogc:def:crs:OTHER::local-grid"})
   @DisplayName("Single other value fail")
   @WithMockUser(roles = "ADMIN")
-  void singleOtherValueFail() throws Exception {
+  void singleOtherValueFail(String identifier) throws Exception {
     mvc.perform(
             post(URIConstants.SERVICES_URI)
                 .contentType(APPLICATION_JSON)
-                .content(serviceFixture("other")))
+                .content(serviceFixture(identifier)))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors[0].field").value("supportedSRS"))
-        .andExpect(jsonPath("$.errors[0].rejectedValue[0]").value("other"));
+        .andExpect(jsonPath("$.errors[0].rejectedValue[0]").value(identifier));
   }
 
   @Test
@@ -69,6 +72,35 @@ class SpatialReferenceSystemTest extends BaseTest {
                 .contentType(APPLICATION_JSON)
                 .content(serviceFixture("EPSG:1", "EPSG:2")))
         .andExpect(status().isCreated());
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "urn:ogc:def:crs:EPSG::25831",
+        "urn:x-ogc:def:crs:EPSG:6.6:25831",
+        "http://www.opengis.net/def/crs/EPSG/0/25831"
+      })
+  @DisplayName("WFS OGC CRS is normalized before validation and saving")
+  @WithMockUser(roles = "ADMIN")
+  void ogcUrnIsNormalized(String identifier) throws Exception {
+    mvc.perform(
+            post(URIConstants.SERVICES_URI)
+                .contentType(APPLICATION_JSON)
+                .content(new JSONObject(serviceFixture(identifier)).put("type", "WFS").toString()))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.supportedSRS[0]").value("EPSG:25831"));
+  }
+
+  @Test
+  @DisplayName("Blank projections remain invalid")
+  @WithMockUser(roles = "ADMIN")
+  void blankProjectionIsRejected() throws Exception {
+    mvc.perform(
+            post(URIConstants.SERVICES_URI)
+                .contentType(APPLICATION_JSON)
+                .content(serviceFixture("EPSG:1", "", "EPSG:1")))
+        .andExpect(status().isBadRequest());
   }
 
   @Test

@@ -19,6 +19,7 @@ import org.sitmun.infrastructure.persistence.type.i18n.I18n;
 import org.sitmun.infrastructure.persistence.type.i18n.I18nListener;
 import org.sitmun.infrastructure.persistence.type.list.StringListAttributeConverter;
 import org.sitmun.infrastructure.persistence.type.srs.Srs;
+import org.sitmun.infrastructure.persistence.type.srs.SrsIdentifier;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -156,6 +157,12 @@ public class Service {
   @PostLoad
   public void postLoad() {
     storedPassword = password;
+  }
+
+  /** Normalize OGC identifiers before bean validation checks the stored EPSG:CODE format. */
+  public void setSupportedSRS(List<String> supportedSRS) {
+    this.supportedSRS =
+        supportedSRS == null ? null : supportedSRS.stream().map(SrsIdentifier::normalize).toList();
   }
 
   @Override

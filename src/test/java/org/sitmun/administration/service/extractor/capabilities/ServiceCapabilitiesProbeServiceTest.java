@@ -57,6 +57,30 @@ class ServiceCapabilitiesProbeServiceTest {
   }
 
   @Test
+  @DisplayName("Probes a new WFS service with GetCapabilities and HTTP Basic authentication")
+  void probesNewWfsServiceWithBasicAuthorization() {
+    when(extractor.extract(any(Request.class)))
+        .thenReturn(ExtractedMetadata.builder().success(true).type("OGC:WFS 2.0.0").build());
+    ServiceCapabilitiesRequest request = new ServiceCapabilitiesRequest();
+    request.setUrl("http://geoserver.local:8080/geoserver/menorca/wfs?version=2.0.0");
+    request.setType("WFS");
+    request.setAuthenticationMode("HTTP Basic authentication");
+    request.setUser("alice");
+    request.setPassword("secret");
+
+    ExtractedMetadata result = probeService.probe(request);
+
+    assertThat(result.getSuccess()).isTrue();
+    assertThat(result.getType()).isEqualTo("OGC:WFS 2.0.0");
+    Request httpRequest = capturedRequest();
+    assertThat(httpRequest.url().encodedPath()).isEqualTo("/geoserver/menorca/wfs");
+    assertThat(httpRequest.url().queryParameter("request")).isEqualTo("GetCapabilities");
+    assertThat(httpRequest.url().queryParameter("service")).isEqualTo("WFS");
+    assertThat(httpRequest.url().queryParameter("version")).isEqualTo("2.0.0");
+    assertThat(httpRequest.header("Authorization")).isEqualTo(Credentials.basic("alice", "secret"));
+  }
+
+  @Test
   @DisplayName("Adds HTTP Basic when mode is HTTP Basic authentication and password is present")
   void addsHttpBasicAuthorization() {
     when(extractor.extract(any(Request.class))).thenReturn(success());

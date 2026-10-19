@@ -19,6 +19,36 @@ class CapabilitiesUrlBuilderTest {
   }
 
   @Test
+  @DisplayName("Adds request and service for a bare WFS URL")
+  void addsGetCapabilitiesForBareWfsUrl() {
+    String result =
+        CapabilitiesUrlBuilder.build("http://geoserver.local:8080/geoserver/menorca/wfs", "WFS");
+
+    assertThat(result).contains("request=GetCapabilities");
+    assertThat(result).contains("service=WFS");
+    assertThat(result).doesNotContain("service=WMS");
+  }
+
+  @Test
+  @DisplayName("Keeps the configured WFS version and other query parameters")
+  void keepsWfsVersionAndQueryParameters() {
+    String result =
+        CapabilitiesUrlBuilder.build("https://example.com/wfs?version=2.0.0&language=ca", "WFS");
+
+    assertThat(result).contains("version=2.0.0", "language=ca");
+    assertThat(result).contains("request=GetCapabilities", "service=WFS");
+    assertThat(result.split("\\?", -1)).hasSize(2);
+  }
+
+  @Test
+  @DisplayName("Leaves a complete WFS GetCapabilities URL unchanged")
+  void leavesExistingWfsGetCapabilitiesUnchanged() {
+    String endpoint = "https://example.com/wfs?service=WFS&version=2.0.0&request=GetCapabilities";
+
+    assertThat(CapabilitiesUrlBuilder.build(endpoint, "WFS")).isEqualTo(endpoint);
+  }
+
+  @Test
   @DisplayName("Keeps MapServer map= and does not add a second ?")
   void keepsMapServerQueryAndSingleQuestionMark() {
     String endpoint =
@@ -41,8 +71,8 @@ class CapabilitiesUrlBuilderTest {
   }
 
   @Test
-  @DisplayName("Rejects non-WMS types")
-  void rejectsNonWmsType() {
+  @DisplayName("Rejects unsupported service types")
+  void rejectsUnsupportedType() {
     assertThatThrownBy(() -> CapabilitiesUrlBuilder.build("https://example.com/wmts", "WMTS"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("Unsupported service type for capabilities: WMTS");
