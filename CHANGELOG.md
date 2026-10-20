@@ -15,6 +15,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **Build**: Spring Boot is 4.1.1; springdoc-openapi is 3.1.1; Liquibase via `spring-boot-starter-liquibase`; OIDC via `spring-boot-starter-security-oauth2-client`.
+- **Build**: `setupGitHooks` is no longer a dependency of `build` (submodule-safe / opt-in via `./gradlew setupGitHooks`).
+- **Build**: Gradle wrapper is 8.14.6.
 - **Proxy**: `INFO` parameters are sent only on GetFeatureInfo. `GETMAP` parameters are sent only on GetMap. `WMS` and `WFS` parameters stay on every operation of that protocol. `WMTS` parameters stay on the service profile and are not sent upstream, so a `format` row on a WMS service no longer replaces the client `FORMAT`. `OLPARAM` parameters are not sent upstream. A parameter code must be allowed for the service protocol; changing the protocol is rejected while a stored row is outside that set. Liquibase `27_parameter_operation_scope` adds `GETMAP` and `WFS` to `serviceParameter.type`, and `GETMAP` and `INFO` to `cartographyServiceParameter.type`. Stored rows are not rewritten.
 - **HTTP**: OkHttp is 5.5.0.
 - **Service checks**: Transport text sent for classification is capped at `exceptionTextMaxLength`.
@@ -25,6 +28,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Auth**: A session cookie accepts only a session JWT. An `edition_access` or `mobile_proxy_access` token sent as `viewer_access_token` or the admin cookie is rejected, so it no longer receives that user's database roles, including `ROLE_ADMIN` ([#282](https://github.com/sitmun/sitmun-backend-core/issues/282)).
 
 ### Fixed
+
+- **Cartography**: `GET /api/cartographies` with a large page size no longer 500s under Hibernate 7. The paged `findAll` EntityGraph no longer joins the `styles` bag (styles still load via `@BatchSize`).
 
 - **Profile**: `featureInfoFields` publishes `maxWidth` and `maxHeight` from `PGI_OPTIONS` for an Image field.
 - **Usage**: Usage ingest returns HTTP 400 when `hourStart`, `serviceId`, or `applicationId` is null. An explicit `0` still binds.
