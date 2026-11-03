@@ -92,3 +92,24 @@ databaseChangeLog:
   - include:
       file: 28_parameter_type_translations.yaml
       relativeToChangelogFile: true
+  - include:
+      file: 29_restrict_service_types.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: 30_cartography_style_name_unique.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: 31_literal_translation_literal_unique.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: 30_geometry_code_lists.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: 34_service_check_observed_timestamptz_rebuild.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 32_service_check_observed_timestamptz.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: 33_service_check_detail_nullable.yaml
+      relativeToChangelogFile: true

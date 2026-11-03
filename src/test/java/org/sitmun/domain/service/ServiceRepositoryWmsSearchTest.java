@@ -9,14 +9,11 @@ import org.sitmun.infrastructure.persistence.type.i18n.I18nTestConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.TestPropertySource;
 
 @DataJpaTest
-@AutoConfigureTestDatabase
-@TestPropertySource(
-    properties = {"spring.liquibase.enabled=false", "spring.jpa.hibernate.ddl-auto=create-drop"})
+@Import(I18nTestConfiguration.class)
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @DisplayName("Service Repository WMS search test")
 class ServiceRepositoryWmsSearchTest {
 
@@ -55,8 +52,4 @@ class ServiceRepositoryWmsSearchTest {
         .doesNotContain("WMTS Hills", "WFS Rivers");
     assertThat(services).extracting(Service::getType).containsOnly("WMS");
   }
-
-  @TestConfiguration
-  @Import(I18nTestConfiguration.class)
-  static class Configuration {}
 }

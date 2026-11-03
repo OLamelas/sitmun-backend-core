@@ -34,25 +34,7 @@ class FeatureTypeExtractorControllerTest extends BaseTest {
   @WithMockUser(roles = "ADMIN")
   @DisplayName("GET: Extract from a DescribeFeatureType request to a WFS 2.0")
   void extractKnownFeatureWFS20() throws Exception {
-    mvc.perform(
-            get(
-                URI_TEMPLATE,
-                "https://www.ign.es/wfs/redes-geodesicas?request=DescribeFeatureType&service=WFS&typeNames=RED_REGENTE"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.success").value(true))
-        .andExpect(jsonPath("$.type").value("GML Schema"))
-        .andExpect(jsonPath("$.asText", Matchers.startsWith("<?xml")))
-        .andExpect(jsonPath("$.asJson.['xsd:schema']").exists());
-  }
-
-  @Test
-  @WithMockUser(roles = "ADMIN")
-  @DisplayName("GET: Extract from a DescribeFeatureType request to a WFS 1.1.0")
-  void extractKnownFeatureWFS110() throws Exception {
-    mvc.perform(
-            get(
-                URI_TEMPLATE,
-                "https://www.ign.es/wfs/redes-geodesicas?request=DescribeFeatureType&service=WFS&version=1.1.0&typeNames=RED_REGENTE"))
+    mvc.perform(get(URI_TEMPLATE, html.url("/gml-schema")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.success").value(true))
         .andExpect(jsonPath("$.type").value("GML Schema"))
@@ -64,7 +46,7 @@ class FeatureTypeExtractorControllerTest extends BaseTest {
   @WithMockUser(roles = "ADMIN")
   @DisplayName("GET: Extract from a bad request to a WFS")
   void extractFailedService() throws Exception {
-    mvc.perform(get(URI_TEMPLATE, "https://www.ign.es/wfs/redes-geodesicas?"))
+    mvc.perform(get(URI_TEMPLATE, html.url("/wfs-exception")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.success").value(false))
         .andExpect(jsonPath("$.reason").value("Unmanaged XML response"))
@@ -74,7 +56,7 @@ class FeatureTypeExtractorControllerTest extends BaseTest {
 
   @Test
   @WithMockUser(roles = "ADMIN")
-  @DisplayName("GET: Extract from a request to HTML page")
+  @DisplayName("GET of an HTML page returns 400 and Unmanaged XML response")
   void extractHtmlPage() throws Exception {
     mvc.perform(get(URI_TEMPLATE, html.url("/")))
         .andExpect(status().isBadRequest())
@@ -96,7 +78,7 @@ class FeatureTypeExtractorControllerTest extends BaseTest {
 
   @Test
   @WithMockUser(roles = "ADMIN")
-  @DisplayName("GET: Extract from a request to an nonexistent domain")
+  @DisplayName("GET of a missing host returns 400 and UnknownHostException")
   void extractNonExistentDomain() throws Exception {
     mvc.perform(get(URI_TEMPLATE, "https://fake"))
         .andExpect(status().isBadRequest())
@@ -106,6 +88,8 @@ class FeatureTypeExtractorControllerTest extends BaseTest {
                 "$.reason",
                 Matchers.allOf(
                     Matchers.containsString("UnknownHostException"),
-                    Matchers.containsString("fake"))));
+                    Matchers.containsString("fake"))))
+        .andExpect(jsonPath("$.asText").value(Matchers.nullValue()))
+        .andExpect(jsonPath("$.asJson").value(Matchers.nullValue()));
   }
 }

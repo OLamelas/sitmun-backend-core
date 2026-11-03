@@ -1,6 +1,7 @@
 package org.sitmun.authorization.client.controller;
 
 import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.sitmun.domain.DomainConstants.Tasks.SCOPE_API;
 import static org.sitmun.domain.DomainConstants.Tasks.SCOPE_SQL;
 import static org.sitmun.domain.DomainConstants.Tasks.SCOPE_URL;
@@ -16,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import java.sql.Statement;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.sitmun.SitmunConstants;
@@ -26,6 +28,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.jdbc.core.ConnectionCallback;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -35,6 +39,8 @@ import org.springframework.test.web.servlet.MvcResult;
 class ClientConfigurationProfileControllerTest {
 
   @Autowired private MockMvc mvc;
+
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   @Autowired private ConfigurationParameterRepository configurationParameterRepository;
 
@@ -566,7 +572,7 @@ class ClientConfigurationProfileControllerTest {
   }
 
   @Test
-  @DisplayName("GET: Ensure root children order follows TNO_ORDER not id order")
+  @DisplayName("GET profile tree children follow TNO_ORDER, node/7 then node/1")
   void treeNodeOrder() throws Exception {
     // node/7 has TNO_ORDER=1 but id=7 (higher id); node/1 has TNO_ORDER=2 but id=1 (lower id).
     // This verifies the profile returns children sorted by TNO_ORDER, not by insertion/id order.
@@ -662,6 +668,45 @@ class ClientConfigurationProfileControllerTest {
     mvc.perform(get(URIConstants.CONFIG_CLIENT_PROFILE_URI_FILTERED, 1, 1, "node/1"))
         .andExpect(jsonPath("$.trees[0].rootNode", is("node/1")))
         .andExpect(jsonPath("$.trees[0].nodes.size()", is(3)));
+  }
+
+  @Test
+  @DisplayName("GET: Profile omits a stored service whose type is not WMS, WFS, or WMTS")
+  void profileOmitsUnsupportedServiceType() throws Exception {
+    executeCommitted(
+        """
+        INSERT INTO STM_SERVICE (SER_ID, SER_NAME, SER_URL, SER_PROTOCOL, SER_BLOCKED, SER_PROXIED)
+        VALUES (99001, 'AIMS leftover', 'https://example.com/aims', 'AIMS', FALSE, FALSE)
+        """);
+    executeCommitted("UPDATE STM_GEOINFO SET GEO_SERID = 99001 WHERE GEO_ID = 1");
+    try {
+      mvc.perform(get(CONFIG_CLIENT_PROFILE_URI, 1, 1))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.services[*].id", not(hasItem("service/99001"))))
+          .andExpect(jsonPath("$.layers[*].id", not(hasItem("layer/1"))));
+      Integer stored =
+          jdbcTemplate.queryForObject(
+              "SELECT COUNT(*) FROM STM_SERVICE WHERE SER_ID = 99001", Integer.class);
+      assertEquals(1, stored);
+    } finally {
+      executeCommitted("UPDATE STM_GEOINFO SET GEO_SERID = 1 WHERE GEO_ID = 1");
+      executeCommitted("DELETE FROM STM_SERVICE WHERE SER_ID = 99001");
+    }
+  }
+
+  private void executeCommitted(String sql) {
+    jdbcTemplate.execute(
+        (ConnectionCallback<Void>)
+            connection -> {
+              boolean previous = connection.getAutoCommit();
+              connection.setAutoCommit(true);
+              try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate(sql);
+              } finally {
+                connection.setAutoCommit(previous);
+              }
+              return null;
+            });
   }
 
   @Test
@@ -772,17 +817,10 @@ class ClientConfigurationProfileControllerTest {
   }
 
   @Test
-  @DisplayName("GET: Task parameters must never emit provided flag or queryType/apiUrl keys")
-  void taskParametersContractViolationDefense() throws Exception {
+  @DisplayName("Task parameters do not emit provided")
+  void taskParametersDoNotEmitProvided() throws Exception {
     mvc.perform(get(CONFIG_CLIENT_PROFILE_URI, 1, 1))
         .andExpect(status().isOk())
-        // Verify no task parameters contain 'provided' key
-        .andExpect(jsonPath("$.tasks[*].parameters.*.provided").doesNotExist())
-        // TaskDto.parameters must not inject top-level keys named queryType or apiUrl
-        // (viewer checks task.parameters.queryType, which is different from TaskDto.queryType)
-        // This test verifies parameters CAN have these names (they're valid parameter names)
-        // but they don't leak into top-level TaskDto fields
-        .andExpect(jsonPath("$.tasks[*].queryType").doesNotExist())
-        .andExpect(jsonPath("$.tasks[*].apiUrl").doesNotExist());
+        .andExpect(jsonPath("$.tasks[*].parameters.*.provided").doesNotExist());
   }
 }

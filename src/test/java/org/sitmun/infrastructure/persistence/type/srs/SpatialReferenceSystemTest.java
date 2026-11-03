@@ -1,7 +1,5 @@
 package org.sitmun.infrastructure.persistence.type.srs;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -10,50 +8,31 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-import org.sitmun.infrastructure.persistence.type.codelist.CodeListValidator;
-import org.sitmun.infrastructure.persistence.type.codelist.CodeListValueRepository;
 import org.sitmun.test.BaseTest;
 import org.sitmun.test.URIConstants;
-import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @DisplayName("SpatialReferenceSystem validation test")
-@Import(CodeListValidator.class)
 class SpatialReferenceSystemTest extends BaseTest {
 
-  @MockitoBean private CodeListValueRepository repository;
-
-  @BeforeEach
-  void mocks() {
-    when(repository.existsByCodeListNameAndValue(any(String.class), any(String.class)))
-        .thenReturn(true);
-  }
-
   @Test
-  @DisplayName("Single projection pass")
+  @DisplayName("POST stores a single EPSG code")
   @WithMockUser(roles = "ADMIN")
-  void singleProjectionPass() throws Exception {
+  void postStoresASingleEpsgCode() throws Exception {
     mvc.perform(
             post(URIConstants.SERVICES_URI)
                 .contentType(APPLICATION_JSON)
                 .content(serviceFixture("EPSG:1")))
         .andExpect(status().isCreated())
-        .andReturn()
-        .getResponse()
-        .getHeader("Location");
+        .andExpect(jsonPath("$.supportedSRS[0]").value("EPSG:1"));
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"other", "urn:ogc:def:crs:OTHER::local-grid"})
-  @DisplayName("Single other value fail")
+  @Test
+  @DisplayName("POST rejects a non-EPSG code")
   @WithMockUser(roles = "ADMIN")
-  void singleOtherValueFail(String identifier) throws Exception {
+  void postRejectsNonEpsgCode() throws Exception {
     mvc.perform(
             post(URIConstants.SERVICES_URI)
                 .contentType(APPLICATION_JSON)
@@ -64,14 +43,16 @@ class SpatialReferenceSystemTest extends BaseTest {
   }
 
   @Test
-  @DisplayName("Multiple projections pass")
+  @DisplayName("POST stores two EPSG codes")
   @WithMockUser(roles = "ADMIN")
-  void multipleProjectionPass() throws Exception {
+  void postStoresTwoEpsgCodes() throws Exception {
     mvc.perform(
             post(URIConstants.SERVICES_URI)
                 .contentType(APPLICATION_JSON)
                 .content(serviceFixture("EPSG:1", "EPSG:2")))
-        .andExpect(status().isCreated());
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.supportedSRS[0]").value("EPSG:1"))
+        .andExpect(jsonPath("$.supportedSRS[1]").value("EPSG:2"));
   }
 
   @ParameterizedTest
@@ -104,9 +85,9 @@ class SpatialReferenceSystemTest extends BaseTest {
   }
 
   @Test
-  @DisplayName("Multiple projections with other value fail")
+  @DisplayName("POST rejects a mix of EPSG and a non-EPSG code")
   @WithMockUser(roles = "ADMIN")
-  void multipleProjectionsWithOtherValueFail() throws Exception {
+  void postRejectsMixedEpsgAndOtherCode() throws Exception {
     mvc.perform(
             post(URIConstants.SERVICES_URI)
                 .contentType(APPLICATION_JSON)

@@ -25,6 +25,7 @@ import org.sitmun.authorization.proxy.validator.ServiceResourceAccessValidator;
 import org.sitmun.domain.application.ApplicationRepository;
 import org.sitmun.domain.cartography.CartographyRepository;
 import org.sitmun.domain.role.Role;
+import org.sitmun.domain.role.RoleRepository;
 import org.sitmun.domain.service.Service;
 import org.sitmun.domain.service.ServiceRepository;
 import org.sitmun.domain.task.TaskRepository;
@@ -35,7 +36,6 @@ import org.sitmun.domain.user.User;
 import org.sitmun.domain.user.UserRepository;
 import org.sitmun.domain.user.configuration.UserConfiguration;
 import org.sitmun.infrastructure.variables.SystemVariableResolver;
-import org.springframework.test.util.ReflectionTestUtils;
 
 /** Proxy {@code validateUserAccess} must deny blocked accounts and honor service blocked flag. */
 @ExtendWith(MockitoExtension.class)
@@ -53,6 +53,7 @@ class ProxyRbacBlockedUserTest {
   @Mock private ApplicationRepository applicationRepository;
   @Mock private TerritoryRepository territoryRepository;
   @Mock private CartographyRepository cartographyRepository;
+  @Mock private RoleRepository roleRepository;
   @Mock private TaskRepository taskRepository;
   @Mock private SqlUserParametrizationDecorator sqlUserParametrizationDecorator;
   @Mock private HttpUserParametrizationDecorator httpUserParametrizationDecorator;
@@ -75,7 +76,8 @@ class ProxyRbacBlockedUserTest {
             cartographyRepository,
             mock(
                 org.sitmun.domain.cartography.parameter.CartographyServiceParameterRepository
-                    .class));
+                    .class),
+            roleRepository);
 
     TaskParameterProcessor taskParameterProcessor =
         new TaskParameterProcessor(systemVariableResolver);
@@ -98,7 +100,6 @@ class ProxyRbacBlockedUserTest {
             mock(
                 org.sitmun.domain.cartography.parameter.CartographyServiceParameterRepository
                     .class));
-    ReflectionTestUtils.setField(proxyConfigurationService, "validateUserAccessEnabled", true);
 
     blockedUser =
         User.builder().id(42).username(BLOCKED_USERNAME).blocked(true).administrator(false).build();
