@@ -73,7 +73,9 @@ class ProxyApplicationRoleValidatorTest {
             territoryRepository,
             cartographyRepository,
             cartographyServiceParameterRepository,
-            roleRepository);
+            roleRepository,
+            mock(org.sitmun.authorization.client.service.AuthorizationService.class),
+            mock(org.sitmun.authorization.editing.WfsEditingPolicy.class));
 
     User user = userWithTerritoryRole();
     lenient().when(userRepository.findByUsername(USER)).thenReturn(Optional.of(user));

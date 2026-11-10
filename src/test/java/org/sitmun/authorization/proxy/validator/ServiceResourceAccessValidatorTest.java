@@ -49,7 +49,9 @@ class ServiceResourceAccessValidatorTest {
             territoryRepository,
             cartographyRepository,
             cartographyServiceParameterRepository,
-            roleRepository);
+            roleRepository,
+            mock(org.sitmun.authorization.client.service.AuthorizationService.class),
+            mock(org.sitmun.authorization.editing.WfsEditingPolicy.class));
   }
 
   @Test
@@ -887,7 +889,7 @@ class ServiceResourceAccessValidatorTest {
   }
 
   @Test
-  @DisplayName("Cartography path allows a transaction whose type name it owns and denies the rest")
+  @DisplayName("Lexical cartography read grants do not authorize a WFS write through a WMS route")
   void cartographyPathChecksTransactionTypeNames() {
     stubAccess(List.of(cartography(42, List.of("ns:roads"))));
     String inside =
@@ -895,7 +897,7 @@ class ServiceResourceAccessValidatorTest {
     String outside =
         "<wfs:Transaction xmlns:wfs=\"http://www.opengis.net/wfs\"><wfs:Delete typeName=\"ns:other\"/></wfs:Transaction>";
 
-    assertTrue(validator.validate(request(Map.of(), 42, inside), "testuser"));
+    assertFalse(validator.validate(request(Map.of(), 42, inside), "testuser"));
     assertFalse(validator.validate(request(Map.of(), 42, outside), "testuser"));
     assertFalse(validator.validate(request(Map.of(), 42, "<not-xml"), "testuser"));
   }

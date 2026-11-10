@@ -275,8 +275,13 @@ public class DomainConstants {
     }
 
     public static boolean isCartographyEditionTask(Task task) {
-      return Integer.valueOf(TASK_TYPE_ID_EDIT).equals(taskTypeId(task))
-          && task.getCartography() != null;
+      if (task == null || !Integer.valueOf(TASK_TYPE_ID_EDIT).equals(taskTypeId(task))
+          || task.getCartography() == null) {
+        return false;
+      }
+      Object scope = task.getProperties() == null ? null : task.getProperties().get(PROPERTY_SCOPE);
+      // Missing scope is the historical cartography-edition contract, not db-edit.
+      return scope == null || "feat-edit".equalsIgnoreCase(String.valueOf(scope).trim());
     }
 
     private Tasks() {

@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class TaskEditCartographyService implements TaskMapper {
 
-  @Value("${sitmun.proxy.url:}")
+  @Value("${sitmun.proxy-middleware.url:}")
   private String proxyUrl;
 
   private final DatabaseConnectionService dbConService;
@@ -87,6 +87,8 @@ public class TaskEditCartographyService implements TaskMapper {
         .id(TASK_PROFILE_ID_PREFIX + task.getId())
         .type(EDITION)
         .typeId(task.getType() != null ? task.getType().getId() : null)
+        .scope("feat-edit")
+        .layer(PROFILE_LAYER_ID_PREFIX + cartography.getId())
         .parameters(parametersDto)
         .fields(fields)
         .url(url)

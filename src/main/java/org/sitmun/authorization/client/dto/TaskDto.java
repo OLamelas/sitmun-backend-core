@@ -34,9 +34,9 @@ import org.sitmun.domain.task.parameter.TaskParameterProcessor;
  * ({@link org.sitmun.domain.task.Task#getUi}); basic tasks often leave this unset.
  *
  * <p><b>{@code scope} and related fields</b>: {@link #scope} is omitted for basic tasks,
- * cartography query profile entries, and edition tasks (those rely on {@link #url}, {@link
- * #parameters}, and for edition {@link #fields}; cartography tasks add {@link #layer} / {@link
- * #cartographyId}). When present, {@code scope} is the viewer-facing execution kind; admin stores
+   * and cartography query profile entries. Cartography edition publishes {@code feat-edit},
+   * {@link #layer}, {@link #url}, {@link #parameters} and the unchanged mobile {@link #fields}.
+   * When present, {@code scope} is the viewer-facing execution kind; admin stores
  * kebab-case values in {@value DomainConstants.Tasks#PROPERTY_SCOPE} ({@value
  * DomainConstants.Tasks#SCOPE_SQL_QUERY}, {@value DomainConstants.Tasks#SCOPE_WEB_API_QUERY}, …)
  * that {@link org.sitmun.domain.task.TaskScopeNormalizer} (and query mappers) map to the constants
@@ -129,8 +129,7 @@ public class TaskDto {
    * org.sitmun.domain.DomainConstants.Tasks#PROFILE_LAYER_ID_PREFIX}{@code id}).
    *
    * <p>Same convention as {@link org.sitmun.authorization.client.mapper.ProfileMapper} layer
-   * payloads and tree node {@code resource}. Used for cartography query/edition entries where the
-   * mapper does not set {@link #scope}.
+   * payloads and tree node {@code resource}. Used for cartography query and edition entries.
    */
   @JsonInclude(JsonInclude.Include.NON_NULL)
   private String layer;
@@ -140,8 +139,9 @@ public class TaskDto {
    * DomainConstants.Tasks#SCOPE_API}, {@value DomainConstants.Tasks#SCOPE_URL}, {@value
    * DomainConstants.Tasks#SCOPE_RESOURCE}, or passthrough such as {@value
    * DomainConstants.Tasks#SCOPE_CARTOGRAPHY_QUERY}). Null when not materialized ({@linkplain
-   * org.sitmun.authorization.client.service.TaskBasicService basic}, cartography-only query DTO,
-   * {@linkplain AuthorizationConstants.TaskDto#EDITION edition}). See class Javadoc and {@link
+   * org.sitmun.authorization.client.service.TaskBasicService basic}, cartography-only query DTO).
+   * Cartography edition publishes {@code feat-edit}, including compatible legacy tasks.
+   * See class Javadoc and {@link
    * org.sitmun.domain.task.TaskScopeNormalizer}.
    */
   @JsonInclude(JsonInclude.Include.NON_NULL)

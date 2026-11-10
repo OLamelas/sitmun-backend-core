@@ -3,6 +3,7 @@ package org.sitmun.authorization.proxy.ogc;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import javax.xml.namespace.QName;
 import org.sitmun.authorization.proxy.ogc.OgcRequestNames.Operation;
 import org.sitmun.authorization.proxy.ogc.OgcRequestNames.View;
 
@@ -74,9 +75,18 @@ public final class OgcLayerAccess {
       return false;
     }
     if (view.operation() == Operation.TRANSACTION) {
-      return !view.typeNames().isEmpty() && owned.containsAll(view.typeNames());
+      // Writes require canonical identities and the task policy, not lexical read grants.
+      return false;
     }
     return view.typeNames().isEmpty() || owned.containsAll(view.typeNames());
+  }
+
+  public static boolean allowTransaction(View view, Set<QName> authorizedTypes) {
+    return !view.rejected() && view.operation() == Operation.TRANSACTION
+        && view.layers().isEmpty() && view.queryLayers().isEmpty() && view.legendLayers().isEmpty()
+        && !view.typeNames().isEmpty()
+        && authorizedTypes.stream().map(QName::toString).collect(java.util.stream.Collectors.toSet())
+            .containsAll(view.typeNames());
   }
 
   private static boolean allowsSubset(Operation operation) {

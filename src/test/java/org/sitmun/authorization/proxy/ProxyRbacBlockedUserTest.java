@@ -77,7 +77,9 @@ class ProxyRbacBlockedUserTest {
             mock(
                 org.sitmun.domain.cartography.parameter.CartographyServiceParameterRepository
                     .class),
-            roleRepository);
+            roleRepository,
+            mock(org.sitmun.authorization.client.service.AuthorizationService.class),
+            mock(org.sitmun.authorization.editing.WfsEditingPolicy.class));
 
     TaskParameterProcessor taskParameterProcessor =
         new TaskParameterProcessor(systemVariableResolver);

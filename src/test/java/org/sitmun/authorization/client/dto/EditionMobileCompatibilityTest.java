@@ -77,6 +77,8 @@ class EditionMobileCompatibilityTest {
       // Then: URL present (edition-mobile uses this to execute edit operations)
       assertThat(result.getUrl()).isNotNull();
       assertThat(result.getUrl()).isEqualTo("http://localhost:8080/middleware/proxy/10/5/WFS/42/9");
+      assertThat(result.getLayer()).isEqualTo("layer/9");
+      assertThat(result.getScope()).isEqualTo("feat-edit");
     }
 
     @Test

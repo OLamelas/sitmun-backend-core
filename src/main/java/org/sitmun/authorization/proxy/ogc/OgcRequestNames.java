@@ -10,6 +10,7 @@ import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
+import org.sitmun.authorization.editing.WfsTransaction;
 
 /**
  * Layer names and the OGC operation taken from a proxy request. Parameter names are matched without
@@ -49,7 +50,18 @@ public final class OgcRequestNames {
     typeNames.addAll(values(parameters, "TYPENAMES"));
 
     Operation fromQuery = operation(first(parameters, "REQUEST"));
+    if (body != null && body.length() > 4_194_304) {
+      return new View(fromQuery, layers, queryLayers, legendLayers, typeNames, true);
+    }
     boolean rejected = false;
+    if (parameters != null) {
+      for (Map.Entry<String, String> entry : parameters.entrySet()) {
+        if ("REQUEST".equalsIgnoreCase(entry.getKey())
+            && operation(entry.getValue()) != fromQuery) {
+          rejected = true;
+        }
+      }
+    }
     Operation fromBody = null;
     if (body != null && !body.isBlank()) {
       try {
@@ -59,14 +71,20 @@ public final class OgcRequestNames {
         if (parsed.operation == Operation.OTHER) {
           rejected = true;
         }
+        if (parsed.operation == Operation.TRANSACTION) {
+          // Query TYPENAME is never evidence for the targets of a write body.
+          typeNames.clear();
+          WfsTransaction.types(body).forEach(name -> typeNames.add(name.toString()));
+        }
       } catch (XMLStreamException ex) {
         rejected = true;
       }
     }
-    if (fromQuery != Operation.OTHER && fromBody != null && fromQuery != fromBody) {
+    if (first(parameters, "REQUEST") != null && fromBody != null && fromQuery != fromBody) {
       rejected = true;
     }
     Operation operation = fromBody != null ? fromBody : fromQuery;
+    if (operation == Operation.TRANSACTION && fromBody == null) rejected = true;
     return new View(operation, layers, queryLayers, legendLayers, typeNames, rejected);
   }
 

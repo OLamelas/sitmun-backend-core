@@ -8,6 +8,8 @@ import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.sitmun.authorization.client.service.AuthorizationService;
+import org.sitmun.authorization.editing.WfsEditingPolicy;
 import org.sitmun.authorization.proxy.dto.ConfigProxyRequestDto;
 import org.sitmun.authorization.proxy.ogc.CartographyGrant;
 import org.sitmun.authorization.proxy.ogc.OgcLayerAccess;
@@ -78,6 +80,8 @@ public class ServiceResourceAccessValidator implements ResourceAccessValidator {
   private final CartographyRepository cartographyRepository;
   private final CartographyServiceParameterRepository cartographyServiceParameterRepository;
   private final RoleRepository roleRepository;
+  private final AuthorizationService authorizationService;
+  private final WfsEditingPolicy wfsEditingPolicy;
 
   @Override
   public boolean supports(String type) {
@@ -167,6 +171,26 @@ public class ServiceResourceAccessValidator implements ResourceAccessValidator {
     List<CartographyGrant> grants = serviceCartographies.stream().map(this::grant).toList();
     OgcRequestNames.View names =
         OgcRequestNames.parse(request.getParameters(), request.getRequestBody());
+    if (names.rejected()) return false;
+    if (names.operation() == OgcRequestNames.Operation.TRANSACTION) {
+      if (request.getCartographyId() == null || !TYPE_WFS.equalsIgnoreCase(request.getType())
+          || !TYPE_WFS.equalsIgnoreCase(service.getType()) || !"POST".equalsIgnoreCase(request.getMethod())
+          || !wfsServiceParameter(request)) return false;
+      try {
+        // Full account/application/territory gate and the existing effective-role task query.
+        var tasks = authorizationService.findTasksByUserApplicationAndTerritory(
+            userName, request.getAppId(), request.getTerId());
+        return serviceCartographies.stream()
+            .filter(layer -> Objects.equals(layer.getId(), request.getCartographyId()))
+            .findFirst()
+            .flatMap(layer -> wfsEditingPolicy.target(layer, tasks, accessibleCartographies,
+                userName, request.getAppId(), request.getTerId()))
+            .map(types -> OgcLayerAccess.allowTransaction(names, types))
+            .orElse(false);
+      } catch (org.springframework.security.access.AccessDeniedException ex) {
+        return false;
+      }
+    }
     boolean allowed =
         request.getCartographyId() == null
             ? OgcLayerAccess.allowService(names, grants)
@@ -183,6 +207,12 @@ public class ServiceResourceAccessValidator implements ResourceAccessValidator {
 
     log.debug("Service access validation passed for user: {}", userName);
     return true;
+  }
+
+  private static boolean wfsServiceParameter(ConfigProxyRequestDto request) {
+    return request.getParameters() == null || request.getParameters().entrySet().stream()
+        .filter(entry -> "SERVICE".equalsIgnoreCase(entry.getKey()))
+        .allMatch(entry -> TYPE_WFS.equalsIgnoreCase(entry.getValue()));
   }
 
   private boolean allowCartography(
