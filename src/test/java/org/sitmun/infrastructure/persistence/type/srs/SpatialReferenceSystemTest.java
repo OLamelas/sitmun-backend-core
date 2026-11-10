@@ -10,6 +10,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.sitmun.test.BaseTest;
 import org.sitmun.test.URIConstants;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -36,10 +38,10 @@ class SpatialReferenceSystemTest extends BaseTest {
     mvc.perform(
             post(URIConstants.SERVICES_URI)
                 .contentType(APPLICATION_JSON)
-                .content(serviceFixture(identifier)))
+                .content(serviceFixture("not-an-epsg-code")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors[0].field").value("supportedSRS"))
-        .andExpect(jsonPath("$.errors[0].rejectedValue[0]").value(identifier));
+        .andExpect(jsonPath("$.errors[0].rejectedValue[0]").value("not-an-epsg-code"));
   }
 
   @Test
