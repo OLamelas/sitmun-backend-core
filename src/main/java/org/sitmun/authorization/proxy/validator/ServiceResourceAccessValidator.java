@@ -183,9 +183,22 @@ public class ServiceResourceAccessValidator implements ResourceAccessValidator {
         return serviceCartographies.stream()
             .filter(layer -> Objects.equals(layer.getId(), request.getCartographyId()))
             .findFirst()
-            .flatMap(layer -> wfsEditingPolicy.target(layer, tasks, accessibleCartographies,
-                userName, request.getAppId(), request.getTerId()))
-            .map(types -> OgcLayerAccess.allowTransaction(names, types))
+            .map(layer -> {
+              var types = wfsEditingPolicy.target(layer, tasks, accessibleCartographies,
+                  userName, request.getAppId(), request.getTerId());
+              if (types.isEmpty() || !OgcLayerAccess.allowTransaction(names, types.get())) return false;
+              try {
+                if (org.sitmun.authorization.editing.WfsTransaction.deletesOnly(request.getRequestBody())) return true;
+                var schema = wfsEditingPolicy.schema(layer, tasks, accessibleCartographies,
+                    userName, request.getAppId(), request.getTerId());
+                if (schema.isEmpty()) return false;
+                var policy = org.sitmun.authorization.editing.WfsAttributePolicy.effective(layer, tasks, schema.get());
+                var denied = org.sitmun.authorization.editing.WfsTransaction.forbiddenAttributes(
+                    request.getRequestBody(), schema.get(), policy);
+                if (!denied.isEmpty()) throw new org.sitmun.authorization.editing.WfsAttributeDeniedException(denied);
+                return true;
+              } catch (javax.xml.stream.XMLStreamException ex) { return false; }
+            })
             .orElse(false);
       } catch (org.springframework.security.access.AccessDeniedException ex) {
         return false;

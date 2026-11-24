@@ -1,6 +1,7 @@
 package org.sitmun.authorization.editing;
 
 import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import javax.xml.namespace.QName;
@@ -109,5 +110,64 @@ public final class WfsTransaction {
     if (namespace == null || namespace.isBlank())
       throw new XMLStreamException("Unbound type QName");
     return new QName(namespace, raw.substring(colon + 1));
+  }
+
+  /** Every submitted Update property is a write, even if a client claims it is unchanged. */
+  public static Set<String> forbiddenAttributes(String xml, WfsAttributeSchema schema, WfsAttributePolicy policy)
+      throws XMLStreamException {
+    var root = WfsXml.read(xml.getBytes(StandardCharsets.UTF_8));
+    if (root.getNamespaceURI() == null || !WFS.contains(root.getNamespaceURI()) || !"Transaction".equals(root.getLocalName()))
+      throw new XMLStreamException("Not a WFS transaction");
+    Set<String> forbidden = new LinkedHashSet<>();
+    for (var operation : WfsXml.children(root)) {
+      if (!root.getNamespaceURI().equals(operation.getNamespaceURI())) throw new XMLStreamException("Unknown operation namespace");
+      String kind = operation.getLocalName();
+      if ("Insert".equals(kind)) {
+        if (operation.hasAttribute("idgen") && !"GenerateNew".equals(operation.getAttribute("idgen")))
+          throw new XMLStreamException("Insert cannot reuse or replace existing identifiers");
+        for (var feature : WfsXml.children(operation)) {
+          if (!WfsXml.name(feature).toString().equals(schema.featureType()))
+            throw new XMLStreamException("Wrong inserted feature type");
+          for (int i = 0; i < feature.getAttributes().getLength(); i++) {
+            if (!javax.xml.XMLConstants.XMLNS_ATTRIBUTE_NS_URI.equals(feature.getAttributes().item(i).getNamespaceURI()))
+              throw new XMLStreamException("Inserted feature attributes/identifiers are unsupported");
+          }
+          for (var property : WfsXml.children(feature)) {
+            var matches = schema.attributes().stream().filter(a -> a.identity().equals(WfsXml.name(property))).toList();
+            if (matches.size() != 1) throw new XMLStreamException("Unknown inserted property");
+            if (matches.get(0).generated()) forbidden.add(matches.get(0).expandedName());
+          }
+        }
+      } else if ("Update".equals(kind)) {
+        if (!WfsXml.expand(operation, operation.getAttribute("typeName")).toString().equals(schema.featureType()))
+          throw new XMLStreamException("Wrong updated feature type");
+        for (var property : WfsXml.children(operation)) {
+          if (isFilter(property)) continue;
+          if (!WfsXml.name(property).equals(new QName(root.getNamespaceURI(), "Property")))
+            throw new XMLStreamException("Unsupported Update child");
+          var children = WfsXml.children(property);
+          String reference = root.getNamespaceURI().endsWith("/2.0") ? "ValueReference" : "Name";
+          var names = children.stream().filter(e -> WfsXml.name(e).equals(new QName(root.getNamespaceURI(), reference))).toList();
+          if (names.size() != 1 || !WfsXml.children(names.get(0)).isEmpty()
+              || children.stream().anyMatch(e -> !WfsXml.name(e).equals(new QName(root.getNamespaceURI(), reference))
+                  && !WfsXml.name(e).equals(new QName(root.getNamespaceURI(), "Value"))))
+            throw new XMLStreamException("Invalid property reference");
+          var field = schema.property(names.get(0), names.get(0).getTextContent().trim());
+          if (field.generated() || !field.geometry() && !policy.editableAttributes().contains(field.expandedName()))
+            forbidden.add(field.expandedName());
+        }
+      } else if (!"Delete".equals(kind)) throw new XMLStreamException("Unsupported write");
+    }
+    return Set.copyOf(forbidden);
+  }
+
+  public static boolean deletesOnly(String xml) throws XMLStreamException {
+    var root = WfsXml.read(xml.getBytes(StandardCharsets.UTF_8));
+    return WfsXml.children(root).stream().allMatch(e -> "Delete".equals(e.getLocalName()));
+  }
+
+  private static boolean isFilter(org.w3c.dom.Element element) {
+    return "Filter".equals(element.getLocalName()) && Set.of("http://www.opengis.net/ogc", "http://www.opengis.net/fes/2.0")
+        .contains(element.getNamespaceURI());
   }
 }

@@ -250,11 +250,24 @@ tasks.withType(Test).configureEach {
   }
 }
 
+// Keep the default H2 test tasks isolated from datasource environment variables
+// (for example, SPRING_DATASOURCE_URL exported for local development).
+tasks.named('test', Test) {
+  systemProperty 'spring.datasource.url', 'jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE'
+  systemProperty 'spring.datasource.driver-class-name', 'org.h2.Driver'
+  systemProperty 'spring.datasource.username', 'sa'
+  systemProperty 'spring.datasource.password', ''
+}
+
 // H2 Database Tests (default)
 tasks.register('testH2', Test) {
   group = 'verification'
   description = 'Run tests with H2 in-memory database'
   systemProperty 'spring.profiles.active', 'test,h2'
+  systemProperty 'spring.datasource.url', 'jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE'
+  systemProperty 'spring.datasource.driver-class-name', 'org.h2.Driver'
+  systemProperty 'spring.datasource.username', 'sa'
+  systemProperty 'spring.datasource.password', ''
   systemProperty 'sitmun.user.secret', 'test-only-insecure-user-secret-32-bytes'
   systemProperty 'sitmun.proxy-middleware.secret', 'test-only-insecure-middleware-secret'
   

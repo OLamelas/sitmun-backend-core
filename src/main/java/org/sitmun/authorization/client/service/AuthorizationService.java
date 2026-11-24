@@ -415,6 +415,10 @@ public class AuthorizationService {
         .filter(task -> !DomainConstants.Tasks.isCartographyEditionTask(task)
             || editable.contains(task.getCartography().getId()))
         .toList();
+    Map<Integer, org.sitmun.authorization.editing.WfsAttributeSchema> attributeSchemas = new java.util.HashMap<>();
+    layers.stream().filter(layer -> editable.contains(layer.getId())).forEach(layer ->
+        wfsEditingPolicy.schema(layer, tasks, layers, context.getUsername(), context.getAppId(), context.getTerritoryId())
+            .ifPresent(schema -> attributeSchemas.put(layer.getId(), schema)));
     tasks.forEach(translationService::updateInternationalization);
 
     List<ApplicationTreeView> treeViews =
@@ -473,6 +477,7 @@ public class AuthorizationService {
     return Optional.of(
         pruneProfile(Profile.builder()
             .application(application.get())
+            .wfsAttributeSchemas(attributeSchemas)
             .territory(territory.get())
             .backgrounds(backgrounds)
             .groups(cartographyPermissions)

@@ -36,6 +36,7 @@ public final class ProblemTypes {
 
   /** The authenticated user does not have permission for this resource. HTTP 403. */
   public static final String FORBIDDEN = BASE_URI + "forbidden";
+  public static final String WFS_ATTRIBUTE_FORBIDDEN = BASE_URI + "wfs-attribute-forbidden";
 
   // ============================================================================
   // VALIDATION & INPUT ERRORS

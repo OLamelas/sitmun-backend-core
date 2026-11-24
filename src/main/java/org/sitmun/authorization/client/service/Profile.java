@@ -30,4 +30,5 @@ public class Profile {
   private Map<Tree, List<TreeNode>> treeNodes;
   private List<ConfigurationParameter> global;
   private ProfileContext context;
+  private Map<Integer, org.sitmun.authorization.editing.WfsAttributeSchema> wfsAttributeSchemas;
 }

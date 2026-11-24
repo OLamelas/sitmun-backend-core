@@ -26,6 +26,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,6 +35,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/config/proxy")
 @Slf4j
 public class ProxyConfigurationController {
+
+  @ExceptionHandler(org.sitmun.authorization.editing.WfsAttributeDeniedException.class)
+  public ResponseEntity<ProblemDetail> attributeDenied(
+      org.sitmun.authorization.editing.WfsAttributeDeniedException ex, HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+        .body(ProblemDetail.builder().type(ProblemTypes.WFS_ATTRIBUTE_FORBIDDEN).status(403)
+            .title("WFS attribute writes forbidden").detail("The entire transaction was rejected; no edits were saved")
+            .instance(request.getRequestURI()).properties(java.util.Map.of("attributes", ex.attributes())).build());
+  }
 
   private final ProxyConfigurationService proxyConfigurationService;
   private final ProxyDelegatedTokenAuthenticator delegatedTokenAuthenticator;

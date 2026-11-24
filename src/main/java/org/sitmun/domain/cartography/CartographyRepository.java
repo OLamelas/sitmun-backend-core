@@ -13,6 +13,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.data.rest.core.annotation.RepositoryRestResource;
 import org.springframework.data.rest.core.annotation.RestResource;
 import org.springframework.lang.NonNull;
+import org.springframework.transaction.annotation.Transactional;
 
 @Tag(name = "cartography")
 @RepositoryRestResource(
@@ -37,6 +38,13 @@ public interface CartographyRepository extends JpaRepository<Cartography, Intege
       attributePaths = {"service", "spatialSelectionService", "spatialSelectionConnection"})
   @NonNull
   Optional<Cartography> findById(@NonNull Integer id);
+
+  /** Load only the relationships needed after the repository session closes during WFS discovery. */
+  @RestResource(exported = false)
+  @Transactional(readOnly = true)
+  @EntityGraph(attributePaths = {"service.parameters", "serviceParameters"})
+  @Query("select cartography from Cartography cartography where cartography.id = :id")
+  Optional<Cartography> findForWfsDiscoveryById(@Param("id") Integer id);
 
   @Query(
       "select cartography from Cartography cartography left join fetch cartography.service where cartography.id =:id")

@@ -35,20 +35,69 @@ public class WfsMetadataResolver {
       String password,
       List<String> configured)
       throws IOException, XMLStreamException {
+    var builder = metadataUrl(endpoint, fixed);
+    builder.queryParam("SERVICE", "WFS").queryParam("REQUEST", "GetCapabilities");
+    return resolveNames(fetch(builder.build(true).toUri(), user, password), configured);
+  }
+
+  public WfsAttributeSchema describe(
+      String endpoint, Map<String, String> fixed, String user, String password, List<String> configured)
+      throws IOException, XMLStreamException {
+    WfsDiscoveryException.Stage stage = WfsDiscoveryException.Stage.CONFIGURATION;
+    try {
+      if (configured == null || configured.size() != 1)
+        throw new XMLStreamException("Exactly one configured WFS type is required");
+      var capabilities = metadataUrl(endpoint, fixed);
+      capabilities.queryParam("SERVICE", "WFS").queryParam("REQUEST", "GetCapabilities");
+      URI capabilitiesUri = capabilities.build(true).toUri();
+      stage = WfsDiscoveryException.Stage.CAPABILITIES_REQUEST;
+      byte[] document = fetch(capabilitiesUri, user, password);
+      stage = WfsDiscoveryException.Stage.CAPABILITIES_PARSE;
+      Set<QName> names = resolveNames(document, configured);
+      if (names.size() != 1) throw new XMLStreamException("Ambiguous WFS feature type");
+      stage = WfsDiscoveryException.Stage.CONFIGURATION;
+      var builder = metadataUrl(endpoint, fixed);
+      String version = builder.build(true).getQueryParams().entrySet().stream()
+          .filter(entry -> "VERSION".equalsIgnoreCase(entry.getKey()))
+          .flatMap(entry -> entry.getValue().stream()).findFirst().orElse("1.1.0");
+      if (builder.build(true).getQueryParams().keySet().stream().noneMatch("VERSION"::equalsIgnoreCase))
+        builder.queryParam("VERSION", version);
+      builder.queryParam("SERVICE", "WFS").queryParam("REQUEST", "DescribeFeatureType")
+          .queryParam("2.0.0".equals(version) ? "TYPENAMES" : "TYPENAME", URLEncoder.encode(configured.get(0), StandardCharsets.UTF_8));
+      URI schemaUri = builder.build(true).toUri();
+      stage = WfsDiscoveryException.Stage.SCHEMA_REQUEST;
+      byte[] schema = fetch(schemaUri, user, password);
+      stage = WfsDiscoveryException.Stage.SCHEMA_PARSE;
+      return WfsAttributeSchema.parse(schema, names.iterator().next());
+    } catch (Exception failure) {
+      throw WfsDiscoveryException.at(stage, failure);
+    }
+  }
+
+  private UriComponentsBuilder metadataUrl(String endpoint, Map<String, String> fixed) throws IOException {
     URI uri = URI.create(endpoint);
     if (uri.getScheme() == null
         || !Set.of("http", "https").contains(uri.getScheme())
         || uri.getHost() == null
         || uri.getUserInfo() != null
-        || uri.getFragment() != null
-        || configured == null
-        || configured.isEmpty()) throw new IOException("Unverifiable WFS endpoint");
-    // The current proxy rebuilds encoded URLs differently when parameters are
-    // present. Do not certify a destination whose wire identity is ambiguous.
-    if (!java.util.Objects.equals(uri.getRawPath(), uri.getPath())
-        || uri.getRawQuery() != null
-            && (uri.getRawQuery().contains("%") || uri.getRawQuery().contains("+"))) {
+        || uri.getFragment() != null) throw new IOException("Unverifiable WFS endpoint");
+    // Only admit encoded plus in query values: the proxy preserves it and both
+    // endpoints decode it once. Other encodings and literal plus remain unverified.
+    if (!java.util.Objects.equals(uri.getRawPath(), uri.getPath())) {
       throw new IOException("Ambiguous encoded WFS endpoint");
+    }
+    Set<String> names = new java.util.HashSet<>();
+    if (uri.getRawQuery() != null) {
+      for (String component : uri.getRawQuery().split("&", -1)) {
+        int equals = component.indexOf('=');
+        String name = equals < 0 ? component : component.substring(0, equals);
+        String value = equals < 0 ? "" : component.substring(equals + 1);
+        if (name.isEmpty() || name.contains("%") || name.contains("+")
+            || value.contains("+") || value.replaceAll("(?i)%2b", "").contains("%")
+            || !names.add(name.toUpperCase(java.util.Locale.ROOT))) {
+          throw new IOException("Ambiguous encoded WFS endpoint");
+        }
+      }
     }
     var builder = UriComponentsBuilder.fromUri(uri);
     // Preserve backend-owned routing parameters, but never request a write as metadata.
@@ -85,9 +134,7 @@ public class WfsMetadataResolver {
                 URLEncoder.encode(value, StandardCharsets.UTF_8));
           }
         });
-    builder.queryParam("SERVICE", "WFS").queryParam("REQUEST", "GetCapabilities");
-    byte[] document = fetch(builder.build(true).toUri(), user, password);
-    return resolveNames(document, configured);
+    return builder;
   }
 
   byte[] fetch(URI uri, String user, String password) throws IOException {
@@ -127,6 +174,7 @@ public class WfsMetadataResolver {
 
   static Set<QName> resolveNames(byte[] document, List<String> configured)
       throws XMLStreamException {
+    if (configured == null || configured.isEmpty()) throw new XMLStreamException("Missing configured types");
     XMLStreamReader reader =
         WfsTransaction.xmlFactory().createXMLStreamReader(new ByteArrayInputStream(document));
     record Name(String lexical, QName expanded) {}

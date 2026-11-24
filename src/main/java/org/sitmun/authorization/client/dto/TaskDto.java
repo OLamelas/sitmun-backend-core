@@ -117,6 +117,10 @@ public class TaskDto {
   @JsonInclude(JsonInclude.Include.NON_NULL)
   private Map<String, Object> fields;
 
+  /** Versioned WFS permissions, deliberately independent of the mobile form schema. */
+  private org.sitmun.authorization.editing.WfsAttributePolicy wfsAttributePolicy;
+  private org.sitmun.authorization.editing.WfsAttributeSchema wfsAttributeSchema;
+
   /**
    * @deprecated Prefer {@linkplain #layer} ({@code layer/<id>}). Bare numeric legacy form.
    */

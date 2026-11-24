@@ -47,6 +47,20 @@ public abstract class ProfileMapper {
   public abstract ProfileDto map(
       Profile profile, @Context Application application, @Context Territory territory);
 
+  private void publishWfsAttributes(Profile profile, ProfileDto dto) {
+    if (dto.getTasks() == null) return;
+    for (TaskDto task : dto.getTasks()) {
+      if (!"edition".equals(task.getType()) || task.getLayer() == null) continue;
+      var layer = profile.getLayers().stream().filter(item ->
+          task.getLayer().equals(PROFILE_LAYER_ID_PREFIX + item.getId())).findFirst();
+      var schema = layer.isPresent() && profile.getWfsAttributeSchemas() != null
+          ? profile.getWfsAttributeSchemas().get(layer.get().getId()) : null;
+      task.setWfsAttributeSchema(schema);
+      task.setWfsAttributePolicy(schema == null ? null :
+          org.sitmun.authorization.editing.WfsAttributePolicy.effective(layer.get(), profile.getTasks(), schema));
+    }
+  }
+
   String map(User user) {
     if (user == null) {
       return null;
@@ -556,6 +570,7 @@ public abstract class ProfileMapper {
   void completeProfile(Profile profile, @MappingTarget ProfileDto.ProfileDtoBuilder builder) {
     completeApplicationDto(profile, builder);
     completeTreeDto(profile, builder);
+    publishWfsAttributes(profile, builder.build());
   }
 
   String mapCartographyPermissionToString(CartographyPermission value) {

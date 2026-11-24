@@ -90,6 +90,45 @@ class WfsWriteAuthorizationTest {
         .thenReturn(List.of(task));
     when(metadata.resolve(anyString(), anyMap(), any(), any(), anyList()))
         .thenReturn(Set.of(new QName("urn:roads", "roads")));
+    when(metadata.describe(anyString(), anyMap(), any(), any(), anyList()))
+        .thenReturn(WfsAttributePolicyTest.schema());
+  }
+
+  @Test
+  void absentPolicyDeniesAttributesAndRevocationRejectsTheWholeBatch() {
+    String update = "<w:Update typeName='a:roads'><w:Property><w:Name>a:name</w:Name><w:Value>new</w:Value></w:Property></w:Update>";
+    assertThrows(WfsAttributeDeniedException.class, () -> validator.validate(request(update), "alice"));
+    task.setProperties(Map.of(WfsAttributePolicy.KEY, Map.of("version", 1, "featureType", "{urn:roads}roads",
+        "editableAttributes", List.of("{urn:roads}name"))));
+    assertTrue(validator.validate(request(update), "alice"));
+    task.setProperties(Map.of());
+    var rejected = assertThrows(WfsAttributeDeniedException.class, () -> validator.validate(
+        request("<w:Insert><a:roads><a:id>1</a:id></a:roads></w:Insert>" + update), "alice"));
+    assertEquals(Set.of("{urn:roads}name"), rejected.attributes());
+    assertTrue(validator.validate(request("<w:Delete typeName='a:roads'/>"), "alice"));
+  }
+
+  @Test
+  void authorizesEmptyNamespaceFromThePersistedContractAndReportsRevocationWithoutValues() throws Exception {
+    when(metadata.describe(anyString(), anyMap(), any(), any(), anyList()))
+        .thenReturn(WfsAttributePolicyTest.schema(false));
+    String update = "<w:Update typeName='a:roads'><w:Property><w:Name>name</w:Name>"
+        + "<w:Value>private-value</w:Value></w:Property></w:Update>";
+    task.setProperties(Map.of("scope", "feat-edit", WfsAttributePolicy.KEY,
+        Map.of("version", 1, "featureType", "{urn:roads}roads", "editableAttributes", List.of("{}name"))));
+    assertTrue(validator.validate(request(update), "alice"));
+    task.setProperties(Map.of("scope", "feat-edit", WfsAttributePolicy.KEY,
+        Map.of("version", 1, "featureType", "{urn:roads}roads", "editableAttributes", List.of("{urn:roads}name"))));
+    var rejected = assertThrows(WfsAttributeDeniedException.class,
+        () -> validator.validate(request(update), "alice"));
+    assertEquals(Set.of("{}name"), rejected.attributes());
+    task.setProperties(Map.of());
+    assertEquals(Set.of("{}name"), assertThrows(WfsAttributeDeniedException.class,
+        () -> validator.validate(request(update), "alice")).attributes());
+    // Creation and geometry remain independent of existing-feature attribute grants.
+    assertTrue(validator.validate(request("<w:Insert><a:roads><name>new</name></a:roads></w:Insert>"), "alice"));
+    assertTrue(validator.validate(request(
+        "<w:Update typeName='a:roads'><w:Property><w:Name>shape</w:Name><w:Value/></w:Property></w:Update>"), "alice"));
   }
 
   @Test

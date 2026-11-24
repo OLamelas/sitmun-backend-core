@@ -128,6 +128,20 @@ class ProxyConfigurationControllerErrorTest {
   }
 
   @Test
+  void returnsVerifiedConflictingAttributesWithoutValues() throws Exception {
+    when(delegatedTokenAuthenticator.authenticate(eq("proxy-jwt"), anyCollection()))
+        .thenReturn(new Outcome.Success(new Result("alice", System.currentTimeMillis())));
+    when(proxyConfigurationService.validateUserAccess(any(), eq("alice")))
+        .thenThrow(new org.sitmun.authorization.editing.WfsAttributeDeniedException(java.util.Set.of("{urn:roads}name")));
+    mvc.perform(post("/api/config/proxy").contentType(APPLICATION_JSON)
+        .header(HttpHeaders.AUTHORIZATION, "Bearer proxy-jwt").content(REQUEST))
+        .andExpect(status().isForbidden())
+        .andExpect(content().contentTypeCompatibleWith(APPLICATION_PROBLEM_JSON))
+        .andExpect(jsonPath("$.type").value("https://sitmun.org/problems/wfs-attribute-forbidden"))
+        .andExpect(jsonPath("$.properties.attributes[0]").value("{urn:roads}name"));
+  }
+
+  @Test
   void returnsUnauthorizedProblemWhenProxyJwtIdentifiesBlockedAccount() throws Exception {
     when(delegatedTokenAuthenticator.authenticate(eq("proxy-jwt"), anyCollection()))
         .thenReturn(new Outcome.Denied(Failure.BLOCKED));

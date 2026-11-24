@@ -4,6 +4,7 @@ import static org.sitmun.domain.DomainConstants.Tasks.isCartographyEditionTask;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -37,6 +38,41 @@ public class WfsEditingPolicy {
   private final ApplicationRepository applications;
   private final TerritoryRepository territories;
 
+  private record Destination(String endpoint, Map<String, String> fixed) {}
+
+  /** Admin discovery has no browser-controlled destination, names or schema URLs. */
+  public WfsAttributeSchema describe(Cartography layer) throws Exception {
+    try {
+      var destination = destination(layer, null);
+      return metadata.describe(destination.endpoint(), destination.fixed(), layer.getService().getUser(),
+          layer.getService().getPassword(), layer.getLayers());
+    } catch (Exception failure) {
+      throw WfsDiscoveryException.at(WfsDiscoveryException.Stage.CONFIGURATION, failure);
+    }
+  }
+
+  public Optional<WfsAttributeSchema> schema(
+      Cartography layer, Collection<Task> tasks, Collection<Cartography> readable,
+      String username, Integer appId, Integer territoryId) {
+    if (!eligible(layer, tasks, readable)) return Optional.empty();
+    try {
+      var destination = destination(layer, coordinates(username, appId, territoryId));
+      return Optional.of(metadata.describe(destination.endpoint(), destination.fixed(),
+          layer.getService().getUser(), layer.getService().getPassword(), layer.getLayers()));
+    } catch (Exception ex) {
+      log.warn("WFS attribute schema unavailable: cartography={}", layer.getId());
+      return Optional.empty();
+    }
+  }
+
+  private RequestCoordinates coordinates(String username, Integer appId, Integer territoryId) {
+    RequestCoordinates coordinates = new RequestCoordinates();
+    coordinates.setUser(users.findByUsername(username).orElseThrow());
+    coordinates.setApplication(applications.findById(appId).orElseThrow());
+    coordinates.setTerritory(territories.findById(territoryId).orElseThrow());
+    return coordinates;
+  }
+
   public Optional<Set<QName>> target(
       Cartography layer,
       Collection<Task> tasks,
@@ -47,10 +83,20 @@ public class WfsEditingPolicy {
     if (!eligible(layer, tasks, readable)) return Optional.empty();
     var service = layer.getService();
     try {
-      RequestCoordinates coordinates = new RequestCoordinates();
-      coordinates.setUser(users.findByUsername(username).orElseThrow());
-      coordinates.setApplication(applications.findById(appId).orElseThrow());
-      coordinates.setTerritory(territories.findById(territoryId).orElseThrow());
+      var destination = destination(layer, coordinates(username, appId, territoryId));
+      return Optional.of(metadata.resolve(destination.endpoint(), destination.fixed(),
+          service.getUser(), service.getPassword(), layer.getLayers()));
+    } catch (Exception ex) {
+      // Never log URLs, bodies, credentials, or remote exception messages.
+      log.warn("WFS edition unavailable: cartography={} service={}", layer.getId(), service.getId());
+      return Optional.empty();
+    }
+  }
+
+  private Destination destination(Cartography layer, RequestCoordinates coordinates) {
+      var service = layer.getService();
+      if (!ServiceBlockPolicy.isAccessibleInClientProfile(service) || !"WFS".equalsIgnoreCase(service.getType()))
+        throw new IllegalArgumentException("Not an available WFS service");
       List<NamedParameter> serviceRows =
           service.getParameters() == null
               ? List.of()
@@ -83,37 +129,16 @@ public class WfsEditingPolicy {
                           && !"Transaction".equalsIgnoreCase(entry.getValue())
                       || "SERVICE".equalsIgnoreCase(entry.getKey())
                           && !"WFS".equalsIgnoreCase(entry.getValue()))) {
-        log.warn(
-            "WFS edition unavailable: cartography={} reason=conflicting-operation-parameter",
-            layer.getId());
-        return Optional.empty();
+        throw new IllegalArgumentException("Conflicting operation parameter");
       }
       String endpoint = variables.resolve(service.getServiceURL(), coordinates);
       // Client-expanded endpoint templates cannot establish a server-owned write destination.
       if (endpoint == null || endpoint.contains("{") || endpoint.contains("}")) {
-        log.warn(
-            "WFS edition unavailable: cartography={} reason=client-dependent-endpoint",
-            layer.getId());
-        return Optional.empty();
+        throw new IllegalArgumentException("Client dependent endpoint");
       }
-      return Optional.of(
-          metadata.resolve(
-              endpoint, fixed, service.getUser(), service.getPassword(), layer.getLayers()));
-    } catch (Exception ex) {
-      // Never log URLs, bodies, credentials, or remote exception messages.
-      String reason =
-          ex instanceof javax.xml.stream.XMLStreamException
-              ? "invalid-or-ambiguous-metadata"
-              : ex instanceof java.io.IOException
-                  ? "metadata-unavailable-or-limits"
-                  : "invalid-server-configuration";
-      log.warn(
-          "WFS edition unavailable: cartography={} service={} reason={}",
-          layer.getId(),
-          service.getId(),
-          reason);
-      return Optional.empty();
-    }
+      if (fixed.values().stream().anyMatch(value -> value == null || value.contains("{") || value.contains("}")))
+        throw new IllegalArgumentException("Unresolved fixed parameter");
+      return new Destination(endpoint, fixed);
   }
 
   static boolean eligible(
